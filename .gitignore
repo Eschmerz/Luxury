@@ -1,0 +1,5 @@
+node_modules/
+.env
+credentials-service-account.json
+.DS_Store
+npm-debug.log
