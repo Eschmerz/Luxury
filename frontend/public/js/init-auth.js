@@ -72,31 +72,7 @@ function renderDriveLink() {
     e.preventDefault();
     let popup = null;
     try { popup = window.open('about:blank', '_blank'); } catch {}
-    const closePopupIfOpen = () => { try { if (popup && !popup.closed) popup.close(); } catch {} };
-
-    try {
-      const meta = document.querySelector('meta[name="backend-origin"]');
-      const configured = window.BACKEND_ORIGIN || (meta && meta.content) || null;
-      const base = configured ? configured.replace(/\/$/, '') : location.origin;
-      const isLocal = /localhost:\d+$/.test(base);
-      const urlBase = base + (isLocal ? '' : '/api');
-      let idToken = null;
-      try {
-        const mod = await import('./firebase-auth.js');
-        if (mod && typeof mod.getCurrentIdToken === 'function') idToken = await mod.getCurrentIdToken();
-      } catch {}
-      if (!idToken) {
-        closePopupIfOpen();
-        return alert('Inicia sesión para acceder');
-      }
-      const finalUrl = `${urlBase}/drive?token=${encodeURIComponent(idToken)}`;
-      if (popup && !popup.closed) { try { popup.location.href = finalUrl; return; } catch {} }
-      window.location.href = finalUrl;
-    } catch (err) {
-      console.error('open drive error', err);
-      closePopupIfOpen();
-      alert('No se pudo abrir la carpeta de Drive');
-    }
+    await openDriveNow(popup);
   };
 }
 
@@ -211,8 +187,7 @@ async function openBillingPortal() {
     const meta = document.querySelector('meta[name="backend-origin"]');
     const configured = window.BACKEND_ORIGIN || (meta && meta.content) || null;
     const base = configured ? configured.replace(/\/$/, '') : location.origin;
-    const isLocal = /localhost:\d+$/.test(base);
-    const url = base + (isLocal ? '/billing-portal' : '/api/billing-portal');
+    const url = base + '/billing-portal';
 
     // idToken
     let idToken = null;
@@ -267,8 +242,7 @@ async function fetchMeAndUpdate() {
     const meta = document.querySelector('meta[name="backend-origin"]');
     const configured = window.BACKEND_ORIGIN || (meta && meta.content) || null;
     const base = configured ? configured.replace(/\/$/, '') : location.origin;
-    const isLocal = /localhost:\d+$/.test(base);
-    const url = base + (isLocal ? '/me' : '/api/me');
+    const url = base + '/me';
 
     let idToken = null;
     try {
@@ -309,50 +283,20 @@ async function getIdTokenSafe() {
   return null;
 }
 
-async function tryCreateStripeCustomerWithBackend(idToken) {
-  const { base } = getBackendBase();
-  const resp = await fetch(`${base}/create-stripe-customer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
-    body: JSON.stringify({})
-  });
-  const body = await resp.json().catch(() => ({}));
-  return { ok: resp.ok, status: resp.status, body };
-}
-
-async function getUserPaymentLink(unit_amount, product_name) {
+// Abrir carpeta de Drive respetando políticas de iOS/Safari
+async function openDriveNow(popup) {
   const { base } = getBackendBase();
   const idToken = await getIdTokenSafe();
-  const resp = await fetch(`${base}/user-paylink`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
-    body: JSON.stringify({ unit_amount, product_name })
-  });
-  if (!resp.ok) return await resp.json();
-  return await resp.json();
-}
-
-async function createCheckoutSession(unit_amount, product_name) {
-  const { base } = getBackendBase();
-  const idToken = await getIdTokenSafe();
-  const resp = await fetch(`${base}/create-checkout-session`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
-    body: JSON.stringify({ unit_amount, product_name })
-  });
-  if (!resp.ok) return await resp.json();
-  return await resp.json();
-}
-
-async function createPaymentLink(unit_amount, product_name) {
-  const { base } = getBackendBase();
-  const resp = await fetch(`${base}/create-paylink`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ unit_amount, product_name })
-  });
-  if (!resp.ok) return await resp.json();
-  return await resp.json();
+  if (!idToken) {
+    try { if (popup && !popup.closed) popup.close(); } catch {}
+    alert('Inicia sesión para acceder');
+    return;
+  }
+  const finalUrl = `${base}/drive?token=${encodeURIComponent(idToken)}`;
+  if (popup && !popup.closed) {
+    try { popup.location.href = finalUrl; return; } catch {}
+  }
+  window.location.href = finalUrl;
 }
 
 // Global purchase handler usado por los botones CTA
@@ -371,6 +315,12 @@ window.handlePurchase = async function(e) {
         fallbackUrl = href;
       }
     }
+  }
+
+  // Si ya tiene acceso, llevar directo a Drive
+  if (USER_ACCESS || hasAccess()) {
+    await openDriveNow(popup);
+    return;
   }
 
   const navigate = (url) => {
@@ -473,4 +423,7 @@ window.addEventListener('load', async () => {
     try { updateAccountUI(JSON.parse(stored)); } catch (e) {}
   }
   await fetchMeAndUpdate();
+  // Reintento breve por si el token aún no estaba listo en el primer fetch
+  setTimeout(fetchMeAndUpdate, 1500);
+  setTimeout(fetchMeAndUpdate, 3500);
 });
