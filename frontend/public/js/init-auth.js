@@ -70,6 +70,10 @@ function renderDriveLink() {
   driveBtn.href = '#';
   driveBtn.onclick = async (e) => {
     e.preventDefault();
+    let popup = null;
+    try { popup = window.open('about:blank', '_blank'); } catch {}
+    const closePopupIfOpen = () => { try { if (popup && !popup.closed) popup.close(); } catch {} };
+
     try {
       const meta = document.querySelector('meta[name="backend-origin"]');
       const configured = window.BACKEND_ORIGIN || (meta && meta.content) || null;
@@ -81,11 +85,16 @@ function renderDriveLink() {
         const mod = await import('./firebase-auth.js');
         if (mod && typeof mod.getCurrentIdToken === 'function') idToken = await mod.getCurrentIdToken();
       } catch {}
-      if (!idToken) return alert('Inicia sesión para acceder');
+      if (!idToken) {
+        closePopupIfOpen();
+        return alert('Inicia sesión para acceder');
+      }
       const finalUrl = `${urlBase}/drive?token=${encodeURIComponent(idToken)}`;
-      window.open(finalUrl, '_blank', 'noopener');
+      if (popup && !popup.closed) { try { popup.location.href = finalUrl; return; } catch {} }
+      window.location.href = finalUrl;
     } catch (err) {
       console.error('open drive error', err);
+      closePopupIfOpen();
       alert('No se pudo abrir la carpeta de Drive');
     }
   };
@@ -348,22 +357,38 @@ async function createPaymentLink(unit_amount, product_name) {
 
 // Global purchase handler usado por los botones CTA
 window.handlePurchase = async function(e) {
+  // iOS/Safari: abrir ventana en el gesto del usuario y redirigir luego
+  let popup = null;
+  try { popup = window.open('about:blank', '_blank'); } catch {}
+
   let fallbackUrl = null;
   if (e) {
     if (e.preventDefault) e.preventDefault();
     const target = e.currentTarget || e.target;
     if (target && typeof target.getAttribute === 'function') {
       const href = target.getAttribute('href') || '';
-      // Evitar abrir la misma página en otra pestaña
       if (href && href !== '#' && href !== '' && href !== '/' && href !== window.location.href) {
         fallbackUrl = href;
       }
     }
   }
+
+  const navigate = (url) => {
+    if (!url) return false;
+    if (popup && !popup.closed) {
+      try { popup.location.href = url; return true; } catch {}
+    }
+    window.location.href = url; // fallback mismo tab (compat iOS)
+    return true;
+  };
+
+  const closePopupIfOpen = () => { try { if (popup && !popup.closed) popup.close(); } catch {} };
+
   try {
     const stored = localStorage.getItem('luxury_nyx_user');
     const isLoggedIn = !!stored;
     if (!isLoggedIn) {
+      closePopupIfOpen();
       const modal = document.getElementById('accountModal');
       if (modal) modal.style.display = 'flex';
       ensureSignInButton();
@@ -374,39 +399,40 @@ window.handlePurchase = async function(e) {
     try {
       const pl = await getUserPaymentLink(1200, 'Luxury NYX - Full Access');
       if (pl && pl.url) {
-        window.open(pl.url, '_blank', 'noopener');
+        navigate(pl.url);
         return;
       }
     } catch (e1) {
-      console.warn('Fallo user-paylink, intento Checkout', e1.message);
+      console.warn('Fallo user-paylink, intento Checkout', e1 && e1.message);
     }
 
     // Fallback a Checkout
     try {
       const { url } = await createCheckoutSession(1200, 'Luxury NYX - Full Access');
       if (url) {
-        window.open(url, '_blank', 'noopener');
+        navigate(url);
         return;
       }
     } catch (e2) {
-      console.warn('Fallo create-checkout-session, intento Payment Link genérico', e2.message);
+      console.warn('Fallo create-checkout-session, intento Payment Link genérico', e2 && e2.message);
     }
 
     // Fallback final a Payment Link genérico
     const pay = await createPaymentLink(1200, 'Luxury NYX - Full Access');
     if (pay && pay.url) {
-      window.open(pay.url, '_blank', 'noopener');
+      navigate(pay.url);
     } else if (fallbackUrl) {
-      window.open(fallbackUrl, '_blank', 'noopener');
+      navigate(fallbackUrl);
     } else {
+      closePopupIfOpen();
       alert('No se pudo generar el enlace de pago.');
     }
   } catch (err) {
     console.error('handlePurchase error', err);
-    const stored = localStorage.getItem('luxury_nyx_user');
-    if (stored && fallbackUrl) {
-      window.open(fallbackUrl, '_blank', 'noopener');
+    if (fallbackUrl) {
+      navigate(fallbackUrl);
     } else {
+      closePopupIfOpen();
       alert('Error al procesar la compra. Intenta iniciar sesión nuevamente.');
     }
   }
