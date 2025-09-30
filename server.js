@@ -9,6 +9,7 @@ const { google } = require('googleapis');
 const helmet = require('helmet');
 
 const app = express();
+app.disable('x-powered-by');
 // Trust proxy for correct protocol/IP when behind a load balancer or CDN
 app.set('trust proxy', 1);
 // Basic security headers
