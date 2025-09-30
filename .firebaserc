@@ -1,0 +1,22 @@
+{
+  "projects": {
+    "default": "your-firebase-project-id"
+  },
+  "targets": {
+    "your-firebase-project-id": {
+      "hosting": {
+        "your-site-name": [
+          {
+            "target": "your-site-name",
+            "public": "public",
+            "ignore": [
+              "firebase.json",
+              "**/.*",
+              "**/node_modules/**"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

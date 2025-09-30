@@ -1,0 +1,16 @@
+{
+  "name": "luxury-nyx-firebase",
+  "description": "Firebase Functions for Luxury NYX project",
+  "scripts": {
+    "deploy": "firebase deploy --only functions",
+    "serve": "firebase emulators:start --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.5.0",
+    "firebase-functions": "^4.5.0"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "private": true
+}

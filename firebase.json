@@ -1,0 +1,24 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "functions/**",
+      "server.js",
+      "tools/**",
+      ".env"
+    ],
+    "rewrites": [
+      { "source": "/api/create-stripe-customer", "function": "createStripeCustomer" },
+      { "source": "/api/create-paylink", "function": "createPaylink" },
+      { "source": "/api/stripe/webhook", "function": "stripeWebhook" },
+      { "source": "/api/health", "function": "health" },
+      { "source": "**", "destination": "/index.html" }
+    ]
+  },
+  "functions": {
+    "source": "functions"
+  }
+}
